@@ -32,6 +32,10 @@ brfss_exam<-brfss_exam%>%
 brfss1<-table1(~ht_meters|SEX, brfss_exam) #table for one that will show averages, stratefied by sex
 brfss1
 
+#Here, I am adding a line to indicate mean and median from table 1 (as per # 4 on test)
+#median male: 1.78 meters, median female: 1.63 meters
+#mean male: 1.78 meters, mean female: 1.63 meters
+
 ```
 c) make a plot to examine median differences in height by sex. Report the median heights and upload a PDF or picture of your plot.
   
