@@ -1,0 +1,48 @@
+---
+title: "midterm_ADA"
+author: "Odalis Hernandez"
+date: "10/14/2021"
+output: html_document
+---
+
+```{r}
+library(readr)
+library(ggplot2)
+library(dplyr)
+library (tidyr)
+library(tibble)
+```
+
+  a) import the dataset and show your code
+```{r setup, include=FALSE}
+brfss_exam<-
+ read_csv(
+    "https://raw.githubusercontent.com/kijohnson/ADA-Fall-2021/master/BRFSS2017_10percent_v.csv"
+  )
+```
+
+b) determine median heights for each sex (males and females) 
+```{r}
+library(table1)
+brfss_exam<-brfss_exam%>%
+  mutate(SEX = recode_factor(.x=SEX, 
+                                  `1` = "Male",
+                                  `2`="Female"))%>%
+  na.omit()
+brfss1<-table1(~ht_meters|SEX, brfss_exam) #table for one that will show averages, stratefied by sex
+brfss1
+
+#now I am adding a line indicating the median and mean in the comments, as per question 4
+#mean male: 1.78, mean female: 1.63
+```
+c) make a plot to examine median differences in height by sex. Report the median heights and upload a PDF or picture of your plot.
+  
+```{r}
+brfss_exam%>%
+  ggplot(aes(x=ht_meters, fill=SEX))+
+  geom_boxplot()+
+  theme_minimal()+
+  scale_fill_brewer(palette = 'Paired')
+```
+
+  
