@@ -1,0 +1,196 @@
+---
+title: "acbs_project"
+author: "Odalis Hernandez"
+date: "9/22/2021"
+output: html_document
+---
+
+#importing data
+
+```{r setup, include=FALSE}
+library(haven)
+acbs.data <-read_spss("C:/Users/16206/Documents/MPH/Advanced Data Analysis/2018 ACBS Adult Data SPSS/ACBS_2018_ADULT_PUBLIC_LLCP.sav")
+```
+
+# Data cleaning 
+```{r}
+library(tidyr)
+library(dplyr)
+acbs.data.small<-acbs.data%>%
+  select(`SEX`,`AGEG_F5_M`, `INCIDNT`,`SYMP_30D`,`COPD`, `INCOME2`,`ASTHMAGE`,`WORKENV6`, `EMP_STAT`, `@_IMPRACE`, `SMOKE100`)%>%
+  zap_labels()%>%
+  rename(sex= SEX,
+         age=AGEG_F5_M,
+         long.asth=INCIDNT,
+         symp.30=SYMP_30D,
+         income=INCOME2,
+         work.asth=WORKENV6,
+         employ=EMP_STAT,
+         race=`@_IMPRACE`,
+         smoke=SMOKE100)%>%
+  filter(employ<2)%>%  #excluding individuals that were not at least part-time employed
+  filter(sex<3)%>%
+  filter(COPD<3)%>%  #excluding those who do not know COPD status
+  filter(symp.30<31)%>%
+  filter(income<10)%>%
+
+
+  mutate(sex=recode_factor(.x=sex,
+                       `1`="Male",
+                       `2`="Female"))%>%
+  mutate(age=recode_factor(.x=age,
+                       `1`="<55",
+                       `2`="<55",
+                       `3`="55+",
+                       `4`="55+",
+                       `5`= "55+"))%>%
+  mutate(long.asth=recode_factor(.x=long.asth,
+                       `1`= "5 or fewer yrs ago",
+                       `2`= "5 or fewer yrs ago",
+                       `3`= "5+ yrs ago",
+                       `7`= "Don't know",
+                       `9`= NA_character_))%>%
+  mutate(COPD=recode_factor(.x=COPD,
+                            `1`="Yes",
+                            `2`="No"))%>%
+  drop_na(COPD)%>%
+
+  mutate(income=recode_factor(.x=income,
+                     `1`= "<9,999",
+                     `2`= "10,000-14,999",
+                     `3`="15,000-19,999",
+                     `4`="20,000-24,999",
+                     `5`="25,000-34,999",
+                     `6`="35,000-49,999",
+                     `7`="50,000-74,999",
+                     `8`="75,000+"))%>%
+  mutate(work.asth=recode_factor(.x=work.asth,
+                       `1`= "Yes",
+                       `2`="No",
+                       `7`=NA_character_,
+                       `9`=NA_character_))%>%
+  drop_na(work.asth)%>%
+  mutate(employ=recode_factor(.x=employ,
+                       `1`="Employed Full-time"))%>%
+  
+  mutate(race=recode_factor(.x=race,
+                       `1`= "White",
+                       `2`= "Non-White",
+                       `3`= "Non-White",
+                       `4`= "Non-White",
+                       `5`= "Non-White",
+                       `6`= "Non-White"))%>%    #relevel race to "white" or "non-white"
+  
+  mutate(smoke=recode_factor(.x=smoke,
+                       `1`= "Yes",
+                       `2`="No",
+                       `7`= NA_character_,
+                       `9`=NA_character_))%>%
+  mutate(ses4=case_when(income %in% c("<9,999","10,000-14,999","15,000-19,999") ~ "<19,999",
+                        income %in% c("20,000-24,999","25,000-34,999","35,000-49,999") ~"20,000-49,999",
+                        income %in% c("50,000-74,999") ~"50,000-74,999",
+                        income %in% c("75,000+")~"75,000+"))       #releveling income to 4 levels
+
+```
+
+
+Creatubg table 1
+```{r}
+library(table1)
+
+label(acbs.data.small$ses4)<-"Income"
+label(acbs.data.small$age)<-"Age (under/over 55)"
+label(acbs.data.small$sex)<-"Sex"
+label(acbs.data.small$race)<-"Race (White or Non-White)"
+label(acbs.data.small$race)<-"Race (White or Non-White)"
+label(acbs.data.small$smoke)<-"Ever Smoked"
+label(acbs.data.small$work.asth)<-"Asthma first caused by current job"
+label(acbs.data.small$COPD)<-"COPD"
+
+#Creation of table one showing sample frequencies
+acbs.tb1<-table1(~ ses4  + sex+ smoke + age + race + work.asth | COPD, data=acbs.data.small,overall="Total", rowlabelhead="Variable")
+acbs.tb1
+
+
+library(openxlsx)
+write.xlsx(acbs.tb1, "C:/Users/16206/Documents/MPH/Advanced Data Analysis/acbs_tb1.xlsx")   #exporting table1 to excel
+
+```
+
+Data visualizations 
+```{r}
+#bar chart displaying percent of sample with COPD stratified by exposure variable
+acbs.data.small%>%
+  group_by(COPD,work.asth)%>%
+  count()%>%
+  group_by(work.asth)%>%
+  mutate(perc.copd= round(100*n/sum(n), digits = 1))%>%
+  ggplot(aes(x=work.asth,y=perc.copd,fill=COPD))+
+  geom_col(position="dodge", stat='identity') +
+  theme_minimal()+
+  ylim(0,100)+
+  labs(x="Occupational Asthma",
+       y="Percent",title="Asthma first caused by occupational toxins by COPD status, ACBS 2018") +
+  scale_fill_manual(name = "COPD", labels = c("Has COPD", "Doesn't have COPD"), values=c("#04af57","#6d62d1"))
+
+```
+
+Binary logistic regression models
+```{r}
+#model with stepwise inclusion on biological adjustment variables
+copd.RS<-glm(COPD ~ race + sex, 
+                      data=acbs.data.small, 
+                      family="binomial")
+#lifestyle adjustment variables
+copd.IS<-glm(COPD ~  ses4 + smoke, 
+                      data=acbs.data.small, 
+                      family="binomial")
+#model with covariate adjustments only
+copd.cov<-glm(COPD ~ race + ses4 + sex + smoke, 
+                      data=acbs.data.small, 
+                      family="binomial")
+#final model with all variables and exposure
+copd.all <- glm(COPD ~ race + ses4 + sex + smoke + age  + work.asth, 
+                      data=acbs.data.small, 
+                      family="binomial") 
+
+library(odds.n.ends)
+odds.n.ends(copd.RS)
+odds.n.ends(copd.IS)
+odds.n.ends(copd.cov)
+odds.n.ends(copd.all)
+
+```
+
+Stratified logistic regression by time since asthma diagnosis, less than 5 years ago vs more than 5 years ago
+```{r}
+#logistic regression model- asthma diagnosis less than 5 years ago
+copd.fvl <- glm(COPD ~ ses4  + sex+ smoke + age + work.asth, subset= long.asth== "5 or fewer yrs ago",
+                      data=acbs.data.small, 
+                      family="binomial", maxit = 100) 
+#logistic regression model- asthma diagnosis more than 5 years ago
+copd.fvp <- glm(COPD ~ ses4 + sex + smoke + age  + work.asth, subset= long.asth== "5+ yrs ago",
+                      data=acbs.data.small,
+                      family="binomial", maxit = 100) 
+odds.n.ends(copd.fvl)
+odds.n.ends(copd.fvp)
+```
+
+Assumptions:
+For Binary Logistic regression:
+*Linearity
+*Influence
+*Multicollinearity
+
+All variables included in the model are categorical, so linearity and influential observations do not apply.
+```{r}
+#model fit
+blorr::blr_model_fit_stats(copd.all)
+blorr::blr_test_hosmer_lemeshow(copd.all)  #no evidence of poor model fit 
+
+#VIF for multicolliniarity, if >2 assumption is failed
+car::vif(mod = copd.all) #passed
+
+```
+
+
